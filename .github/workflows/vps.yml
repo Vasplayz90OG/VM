@@ -1,0 +1,55 @@
+name: Leapfrog VPS with Backup
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 */6 * * *'
+
+# This gives the runner permission to save files back to your repo
+permissions:
+  contents: write
+
+jobs:
+  Build-VPS:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repo (Loading your saved files)
+        uses: actions/checkout@v4
+
+      - name: Setup Tmate VPS
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tmate
+          
+          # Start tmate in the background
+          tmate -S /tmp/tmate.sock new-session -d
+          tmate -S /tmp/tmate.sock wait tmate-ready
+          
+          # Grab the SSH connection string
+          TMATE_SSH=$(tmate -S /tmp/tmate.sock display -p '#{tmate_ssh}')
+          
+          echo "====================================="
+          echo "YOUR VPS SSH LINK IS:"
+          echo "$TMATE_SSH"
+          echo "====================================="
+          echo "Save your files in the repository folder to keep them forever!"
+
+      - name: Auto-Backup Loop (Saves files every 30 mins)
+        run: |
+          # This background loop constantly saves your files to GitHub
+          (
+            while true; do
+              sleep 1800 # Sleep for 30 minutes
+              cd $GITHUB_WORKSPACE
+              git config user.name "VPS Auto-Saver"
+              git config user.email "vps@autosaver.com"
+              git add .
+              git commit -m "Auto-backup of VPS files at $(date)" || echo "Nothing new to save."
+              git push || echo "Push failed, will try again later."
+            done
+          ) &
+
+      - name: Keep Alive (Max 5h 50m)
+        run: |
+          echo "VPS is running. Sleeping to keep it alive..."
+          sleep 350m
